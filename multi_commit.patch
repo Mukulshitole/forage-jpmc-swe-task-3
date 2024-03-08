@@ -1,0 +1,259 @@
+From a72b50359c24252fcb6ea7cdca3d001a3141587c Mon Sep 17 00:00:00 2001
+From: Mukulshitole <102034299+Mukulshitole@users.noreply.github.com>
+Date: Wed, 9 Aug 2023 08:43:52 +0530
+Subject: [PATCH 1/2] changes made
+
+---
+ package-lock.json      |  2 +-
+ package.json           |  2 +-
+ src/DataManipulator.ts | 33 +++++++++++++++++++++++----------
+ src/Graph.tsx          | 26 +++++++++++++++++---------
+ 4 files changed, 42 insertions(+), 21 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 8135a72..bc959c2 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -20,7 +20,7 @@
+         "puppeteer": "^1.19.0",
+         "react": "^16.9.0",
+         "react-dom": "^16.9.0",
+-        "react-scripts": "2.1.3"
++        "react-scripts": "^2.1.3"
+       },
+       "devDependencies": {
+         "awesome-typescript-loader": "^5.2.1",
+diff --git a/package.json b/package.json
+index 8ca3a60..e410587 100644
+--- a/package.json
++++ b/package.json
+@@ -15,7 +15,7 @@
+     "puppeteer": "^1.19.0",
+     "react": "^16.9.0",
+     "react-dom": "^16.9.0",
+-    "react-scripts": "2.1.3"
++    "react-scripts": "^2.1.3"
+   },
+   "scripts": {
+     "start": "react-scripts --openssl-legacy-provider start",
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index 7f62295..6c23731 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -1,20 +1,33 @@
+ import { ServerRespond } from './DataStreamer';
+ 
+ export interface Row {
+-  stock: string,
+-  top_ask_price: number,
++  price_abc:number,
++  price_def:number,
++  ratio:number,
+   timestamp: Date,
++  upper_bound: number,
++  lower_bound: number,
++  trigger_alert: number| undefined,
+ }
+ 
+ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]) {
+-    return serverResponds.map((el: any) => {
+-      return {
+-        stock: el.stock,
+-        top_ask_price: el.top_ask && el.top_ask.price || 0,
+-        timestamp: el.timestamp,
+-      };
+-    })
++  static generateRow(serverResponds: ServerRespond[]): Row {
++    const priceABC =(serverResponds[0].top_ask.price+serverResponds[0].top_bid.price)/2;
++    const priceDEF =(serverResponds[1].top_ask.price+serverResponds[1].top_bid.price)/2;
++    const ratio = priceABC/priceDEF;
++    const upperbound=1+0.05;
++    const lowerbound=1-0.05;
++
++    return {
++    price_abc:priceABC,
++    price_def:priceDEF,
++    ratio,
++    timestamp: serverResponds[0].timestamp > serverResponds[1].   timestamp? serverResponds[0].timestamp:serverResponds[1].timestamp,
++    upper_bound: upperbound,
++    lower_bound: lowerbound,
++    trigger_alert:(ratio>upperbound|| ratio<lowerbound)? ratio : undefined,
++   };
++   
+   }
+ }
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 277797d..53ba07b 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -1,5 +1,5 @@
+ import React, { Component } from 'react';
+-import { Table } from '@finos/perspective';
++import { Table, TableData } from '@finos/perspective';
+ import { ServerRespond } from './DataStreamer';
+ import { DataManipulator } from './DataManipulator';
+ import './Graph.css';
+@@ -27,32 +27,40 @@ class Graph extends Component<IProps, {}> {
+       top_ask_price: 'float',
+       top_bid_price: 'float',
+       timestamp: 'date',
++      upper_bound: 'float',
++      lower_bound: 'float',
++      trigger_alert: 'float',
+     };
+ 
+-    if (window.perspective && window.perspective.worker()) {
++    if (window.perspective ) {
+       this.table = window.perspective.worker().table(schema);
+     }
+     if (this.table) {
+       // Load the `table` in the `<perspective-viewer>` DOM reference.
+       elem.load(this.table);
+       elem.setAttribute('view', 'y_line');
+-      elem.setAttribute('column-pivots', '["stock"]');
++     
+       elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('colums', '["ratio","lower_bound","upper_bound","trigger_alert"]');
+       elem.setAttribute('aggregates', JSON.stringify({
+-        stock: 'distinctcount',
+-        top_ask_price: 'avg',
+-        top_bid_price: 'avg',
++        price_abc:'avg',
++        price_def:'avg',
++        ratio:'avg',
+         timestamp: 'distinct count',
++        upper_bound: 'avg',
++        lower_bound: 'avg',
++        trigger_alert: 'avg',
++        
+       }));
+     }
+   }
+ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update(
++      this.table.update([
+         DataManipulator.generateRow(this.props.data),
+-      );
++      ]as unknown as TableData);
++      
+     }
+   }
+ }
+-- 
+2.41.0.windows.3
+
+
+From b358a1e94d03b22d7dd068de4c153ebbe408e80f Mon Sep 17 00:00:00 2001
+From: Mukulshitole <102034299+Mukulshitole@users.noreply.github.com>
+Date: Wed, 9 Aug 2023 09:25:19 +0530
+Subject: [PATCH 2/2] more changes made
+
+---
+ src/DataManipulator.ts | 32 +++++++++++++++++---------------
+ src/Graph.tsx          | 21 ++++++++++++---------
+ 2 files changed, 29 insertions(+), 24 deletions(-)
+
+diff --git a/src/DataManipulator.ts b/src/DataManipulator.ts
+index 6c23731..662774c 100644
+--- a/src/DataManipulator.ts
++++ b/src/DataManipulator.ts
+@@ -12,22 +12,24 @@ export interface Row {
+ 
+ 
+ export class DataManipulator {
+-  static generateRow(serverResponds: ServerRespond[]): Row {
+-    const priceABC =(serverResponds[0].top_ask.price+serverResponds[0].top_bid.price)/2;
+-    const priceDEF =(serverResponds[1].top_ask.price+serverResponds[1].top_bid.price)/2;
+-    const ratio = priceABC/priceDEF;
+-    const upperbound=1+0.05;
+-    const lowerbound=1-0.05;
++      
+ 
+-    return {
+-    price_abc:priceABC,
+-    price_def:priceDEF,
+-    ratio,
+-    timestamp: serverResponds[0].timestamp > serverResponds[1].   timestamp? serverResponds[0].timestamp:serverResponds[1].timestamp,
+-    upper_bound: upperbound,
+-    lower_bound: lowerbound,
+-    trigger_alert:(ratio>upperbound|| ratio<lowerbound)? ratio : undefined,
+-   };
++       static generateRow(serverRespond: ServerRespond[]): Row {
++        const priceABC = (serverRespond[0].top_ask.price + serverRespond[0].top_bid.price) / 2;
++        const priceDEF = (serverRespond[1].top_ask.price + serverRespond[1].top_bid.price) / 2;
++        const ratio = priceABC / priceDEF;
++        const upperBound = 1 + 0.05;
++        const lowerBound = 1 - 0.05;
++        return {
++          price_abc: priceABC,
++          price_def: priceDEF,
++          ratio,
++          timestamp: serverRespond[0].timestamp > serverRespond[1].timestamp ?
++            serverRespond[0].timestamp : serverRespond[1].timestamp,
++          upper_bound: upperBound,
++        lower_bound: lowerBound,
++          trigger_alert: (ratio > upperBound || ratio < lowerBound) ? ratio : undefined,
++        };
+    
+   }
+ }
+diff --git a/src/Graph.tsx b/src/Graph.tsx
+index 53ba07b..35545d6 100644
+--- a/src/Graph.tsx
++++ b/src/Graph.tsx
+@@ -23,16 +23,16 @@ class Graph extends Component<IProps, {}> {
+     const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
+ 
+     const schema = {
+-      stock: 'string',
+-      top_ask_price: 'float',
+-      top_bid_price: 'float',
++      price_abc:'float',
++      price_def:'float',
++      ratio:'float',
+       timestamp: 'date',
+       upper_bound: 'float',
+       lower_bound: 'float',
+       trigger_alert: 'float',
+     };
+ 
+-    if (window.perspective ) {
++    if (window.perspective && window.perspective.worker()) {
+       this.table = window.perspective.worker().table(schema);
+     }
+     if (this.table) {
+@@ -41,7 +41,7 @@ class Graph extends Component<IProps, {}> {
+       elem.setAttribute('view', 'y_line');
+      
+       elem.setAttribute('row-pivots', '["timestamp"]');
+-      elem.setAttribute('colums', '["ratio","lower_bound","upper_bound","trigger_alert"]');
++      elem.setAttribute('columns', '["ratio", "lower_bound", "upper_bound", "trigger_alert"]');
+       elem.setAttribute('aggregates', JSON.stringify({
+         price_abc:'avg',
+         price_def:'avg',
+@@ -57,10 +57,13 @@ class Graph extends Component<IProps, {}> {
+ 
+   componentDidUpdate() {
+     if (this.table) {
+-      this.table.update([
+-        DataManipulator.generateRow(this.props.data),
+-      ]as unknown as TableData);
+-      
++
++       this.table.update([
++
++          DataManipulator.generateRow(this.props.data),
++        ]as unknown as TableData);
++
++    
+     }
+   }
+ }
+-- 
+2.41.0.windows.3
+
